@@ -6,3 +6,5 @@
 # Build directory.
 build/
 out/
+test_basic
+test_basic.cc
