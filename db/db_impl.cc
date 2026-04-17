@@ -11,6 +11,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <iostream>
 
 #include "db/builder.h"
 #include "db/db_iter.h"
@@ -1165,6 +1166,78 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
   return s;
 }
 
+Status DBImpl::Scan(const ReadOptions& options,const Slice& start_key,const Slice& end_key,
+                    std::vector<std::pair<std::string, std::string>>* result) {
+  result->clear();
+  Iterator* it = NewIterator(options);
+  for (it->Seek(start_key);
+       it->Valid() && it->key().compare(end_key) < 0;
+       it->Next()) {
+    result->emplace_back(it->key().ToString(), it->value().ToString());
+  }
+  Status s = it->status();
+  delete it;
+  return s;
+}
+Status DBImpl::DeleteRange(const WriteOptions& options,
+                           const Slice& start_key,
+                           const Slice& end_key) {
+  std::vector<std::string> keys_to_delete;
+  Iterator* it = NewIterator(ReadOptions());
+  for (it->Seek(start_key);
+       it->Valid() && it->key().compare(end_key) < 0;
+       it->Next()) {
+    keys_to_delete.push_back(it->key().ToString());
+  }
+  Status s = it->status();
+  delete it;
+  if (!s.ok()) return s;
+
+  WriteBatch batch;
+  for (const auto& key : keys_to_delete) {
+    batch.Delete(key);
+  }
+  return Write(options, &batch);
+}
+Status DBImpl::ForceFullCompaction() {
+  Status s = TEST_CompactMemTable();
+  if (!s.ok()) return s;
+
+  for (int level = 0; level < config::kNumLevels - 1; level++) {
+    TEST_CompactRange(level, nullptr, nullptr);
+  }
+
+  // Print compaction statistics
+  std::cout << "=== Full Compaction Statistics ===" << std::endl;
+  int total_compactions = 0;
+  int64_t total_bytes_read = 0;
+  int64_t total_bytes_written = 0;
+  {
+    MutexLock l(&mutex_);
+    for (int level = 0; level < config::kNumLevels; level++) {
+      if (stats_[level].bytes_read > 0 || stats_[level].bytes_written > 0) {
+        total_compactions++;
+        total_bytes_read += stats_[level].bytes_read;
+        total_bytes_written += stats_[level].bytes_written;
+      }
+    }
+  }
+
+  int total_files = 0;
+  {
+    MutexLock l(&mutex_);
+    for (int level = 0; level < config::kNumLevels; level++) {
+      total_files += versions_->NumLevelFiles(level);
+    }
+  }
+
+  std::cout << "Compactions executed: " << total_compactions << std::endl;
+  std::cout << "Total files remaining: " << total_files << std::endl;
+  std::cout << "Bytes read: " << total_bytes_read << std::endl;
+  std::cout << "Bytes written: " << total_bytes_written << std::endl;
+
+  return Status::OK();
+}
 Iterator* DBImpl::NewIterator(const ReadOptions& options) {
   SequenceNumber latest_snapshot;
   uint32_t seed;

@@ -7,7 +7,8 @@
 
 #include <cstdint>
 #include <cstdio>
-
+#include <vector>
+#include <utility>
 #include "leveldb/export.h"
 #include "leveldb/iterator.h"
 #include "leveldb/options.h"
@@ -66,6 +67,10 @@ class LEVELDB_EXPORT DB {
   virtual Status Put(const WriteOptions& options, const Slice& key,
                      const Slice& value) = 0;
 
+  virtual Status Scan(const ReadOptions& options,const Slice& start_key,const Slice& end_key,
+     std::vector<std::pair<std::string, std::string>>* result) = 0;
+  virtual Status DeleteRange(const WriteOptions& options,const Slice& start_key,const Slice& end_key) = 0;
+  virtual Status ForceFullCompaction()=0;
   // Remove the database entry (if any) for "key".  Returns OK on
   // success, and a non-OK status on error.  It is not an error if "key"
   // did not exist in the database.

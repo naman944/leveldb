@@ -38,6 +38,10 @@ class DBImpl : public DB {
   // Implementations of the DB interface
   Status Put(const WriteOptions&, const Slice& key,
              const Slice& value) override;
+  Status Scan(const ReadOptions&, const Slice& start_key,const Slice& end_key,
+     std::vector<std::pair<std::string, std::string>>* result) override;
+  Status DeleteRange(const WriteOptions&, const Slice& start_key,const Slice& end_key) override;
+  Status ForceFullCompaction() override;
   Status Delete(const WriteOptions&, const Slice& key) override;
   Status Write(const WriteOptions& options, WriteBatch* updates) override;
   Status Get(const ReadOptions& options, const Slice& key,
