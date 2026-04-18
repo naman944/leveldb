@@ -2128,18 +2128,7 @@ class ModelDB : public DB {
   Status Scan(const ReadOptions& options, const Slice& start_key,
               const Slice& end_key,
               std::vector<std::pair<std::string, std::string>>* result) override {
-    const KVMap* target_map;
-    if (options.snapshot == nullptr) {
-      target_map = &map_;
-    } else {
-      target_map = &(reinterpret_cast<const ModelSnapshot*>(options.snapshot)->map_);
-    }
-    auto it = target_map->lower_bound(start_key.ToString());
-    while (it != target_map->end() && it->first <= end_key.ToString()) {
-      result->push_back(*it);
-      ++it;
-    }
-    return Status::OK();
+    return Status::NotSupported("Not implemented");
   }
   Status DeleteRange(const WriteOptions& options, const Slice& start_key,
                      const Slice& end_key) override {
