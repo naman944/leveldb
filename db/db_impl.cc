@@ -4,15 +4,6 @@
 
 #include "db/db_impl.h"
 
-#include <algorithm>
-#include <atomic>
-#include <cstdint>
-#include <cstdio>
-#include <set>
-#include <string>
-#include <vector>
-#include <iostream>
-
 #include "db/builder.h"
 #include "db/db_iter.h"
 #include "db/dbformat.h"
@@ -23,11 +14,21 @@
 #include "db/table_cache.h"
 #include "db/version_set.h"
 #include "db/write_batch_internal.h"
+#include <algorithm>
+#include <atomic>
+#include <cstdint>
+#include <cstdio>
+#include <iostream>
+#include <set>
+#include <string>
+#include <vector>
+
 #include "leveldb/db.h"
 #include "leveldb/env.h"
 #include "leveldb/status.h"
 #include "leveldb/table.h"
 #include "leveldb/table_builder.h"
+
 #include "port/port.h"
 #include "table/block.h"
 #include "table/merger.h"
@@ -1165,13 +1166,13 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
   current->Unref();
   return s;
 }
-
-Status DBImpl::Scan(const ReadOptions& options,const Slice& start_key,const Slice& end_key,
+// Implementation of db Scan function
+Status DBImpl::Scan(const ReadOptions& options, const Slice& start_key,
+                    const Slice& end_key,
                     std::vector<std::pair<std::string, std::string>>* result) {
   result->clear();
   Iterator* it = NewIterator(options);
-  for (it->Seek(start_key);
-       it->Valid() && it->key().compare(end_key) < 0;
+  for (it->Seek(start_key); it->Valid() && it->key().compare(end_key) < 0;
        it->Next()) {
     result->emplace_back(it->key().ToString(), it->value().ToString());
   }
@@ -1179,13 +1180,12 @@ Status DBImpl::Scan(const ReadOptions& options,const Slice& start_key,const Slic
   delete it;
   return s;
 }
-Status DBImpl::DeleteRange(const WriteOptions& options,
-                           const Slice& start_key,
+// Implementation of db DeleteRange function
+Status DBImpl::DeleteRange(const WriteOptions& options, const Slice& start_key,
                            const Slice& end_key) {
   std::vector<std::string> keys_to_delete;
   Iterator* it = NewIterator(ReadOptions());
-  for (it->Seek(start_key);
-       it->Valid() && it->key().compare(end_key) < 0;
+  for (it->Seek(start_key); it->Valid() && it->key().compare(end_key) < 0;
        it->Next()) {
     keys_to_delete.push_back(it->key().ToString());
   }
@@ -1199,6 +1199,7 @@ Status DBImpl::DeleteRange(const WriteOptions& options,
   }
   return Write(options, &batch);
 }
+// Implementation of db ForceFullCompaction function
 Status DBImpl::ForceFullCompaction() {
   Status s = TEST_CompactMemTable();
   if (!s.ok()) return s;

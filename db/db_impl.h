@@ -5,16 +5,17 @@
 #ifndef STORAGE_LEVELDB_DB_DB_IMPL_H_
 #define STORAGE_LEVELDB_DB_DB_IMPL_H_
 
+#include "db/dbformat.h"
+#include "db/log_writer.h"
+#include "db/snapshot.h"
 #include <atomic>
 #include <deque>
 #include <set>
 #include <string>
 
-#include "db/dbformat.h"
-#include "db/log_writer.h"
-#include "db/snapshot.h"
 #include "leveldb/db.h"
 #include "leveldb/env.h"
+
 #include "port/port.h"
 #include "port/thread_annotations.h"
 
@@ -38,9 +39,15 @@ class DBImpl : public DB {
   // Implementations of the DB interface
   Status Put(const WriteOptions&, const Slice& key,
              const Slice& value) override;
-  Status Scan(const ReadOptions&, const Slice& start_key,const Slice& end_key,
-     std::vector<std::pair<std::string, std::string>>* result) override;
-  Status DeleteRange(const WriteOptions&, const Slice& start_key,const Slice& end_key) override;
+  // Scan the database for keys in the range [start_key, end_key] and return the
+  // results.
+  Status Scan(
+      const ReadOptions&, const Slice& start_key, const Slice& end_key,
+      std::vector<std::pair<std::string, std::string>>* result) override;
+  // Delete the range of keys [start_key, end_key].
+  Status DeleteRange(const WriteOptions&, const Slice& start_key,
+                     const Slice& end_key) override;
+  // Force a full compaction of the database.
   Status ForceFullCompaction() override;
   Status Delete(const WriteOptions&, const Slice& key) override;
   Status Write(const WriteOptions& options, WriteBatch* updates) override;
