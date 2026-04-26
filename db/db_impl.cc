@@ -544,6 +544,9 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   CompactionStats stats;
   stats.micros = env_->NowMicros() - start_micros;
   stats.bytes_written = meta.file_size;
+  stats.num_compactions = 1;
+  stats.num_input_files = 0;
+  stats.num_output_files = (meta.file_size > 0) ? 1 : 0;
   stats_[level].Add(stats);
   return s;
 }
@@ -1035,13 +1038,16 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
 
   CompactionStats stats;
   stats.micros = env_->NowMicros() - start_micros - imm_micros;
+  stats.num_compactions = 1;
   for (int which = 0; which < 2; which++) {
     for (int i = 0; i < compact->compaction->num_input_files(which); i++) {
       stats.bytes_read += compact->compaction->input(which, i)->file_size;
+      stats.num_input_files++;
     }
   }
   for (size_t i = 0; i < compact->outputs.size(); i++) {
     stats.bytes_written += compact->outputs[i].file_size;
+    stats.num_output_files++;
   }
 
   mutex_.Lock();
@@ -1201,6 +1207,16 @@ Status DBImpl::DeleteRange(const WriteOptions& options, const Slice& start_key,
 }
 // Implementation of db ForceFullCompaction function
 Status DBImpl::ForceFullCompaction() {
+  // Snapshot cumulative stats before compaction so we can report only the
+  // work done by this call (stats_[] are lifetime-cumulative).
+  CompactionStats stats_before[config::kNumLevels];
+  {
+    MutexLock l(&mutex_);
+    for (int level = 0; level < config::kNumLevels; level++) {
+      stats_before[level] = stats_[level];
+    }
+  }
+
   Status s = TEST_CompactMemTable();
   if (!s.ok()) return s;
 
@@ -1208,34 +1224,40 @@ Status DBImpl::ForceFullCompaction() {
     TEST_CompactRange(level, nullptr, nullptr);
   }
 
-  // Print compaction statistics
-  std::cout << "=== Full Compaction Statistics ===" << std::endl;
-  int total_compactions = 0;
+  // Propagate any background error recorded during compaction.
+  {
+    MutexLock l(&mutex_);
+    if (!bg_error_.ok()) return bg_error_;
+  }
+
+  // Compute per-field deltas across all levels.
+  int64_t total_num_compactions = 0;
+  int64_t total_num_input_files = 0;
+  int64_t total_num_output_files = 0;
   int64_t total_bytes_read = 0;
   int64_t total_bytes_written = 0;
   {
     MutexLock l(&mutex_);
     for (int level = 0; level < config::kNumLevels; level++) {
-      if (stats_[level].bytes_read > 0 || stats_[level].bytes_written > 0) {
-        total_compactions++;
-        total_bytes_read += stats_[level].bytes_read;
-        total_bytes_written += stats_[level].bytes_written;
-      }
+      total_num_compactions +=
+          stats_[level].num_compactions - stats_before[level].num_compactions;
+      total_num_input_files +=
+          stats_[level].num_input_files - stats_before[level].num_input_files;
+      total_num_output_files +=
+          stats_[level].num_output_files - stats_before[level].num_output_files;
+      total_bytes_read +=
+          stats_[level].bytes_read - stats_before[level].bytes_read;
+      total_bytes_written +=
+          stats_[level].bytes_written - stats_before[level].bytes_written;
     }
   }
 
-  int total_files = 0;
-  {
-    MutexLock l(&mutex_);
-    for (int level = 0; level < config::kNumLevels; level++) {
-      total_files += versions_->NumLevelFiles(level);
-    }
-  }
-
-  std::cout << "Compactions executed: " << total_compactions << std::endl;
-  std::cout << "Total files remaining: " << total_files << std::endl;
-  std::cout << "Bytes read: " << total_bytes_read << std::endl;
-  std::cout << "Bytes written: " << total_bytes_written << std::endl;
+  std::printf("%d; %d; %d; %llu; %llu\n",
+              static_cast<int>(total_num_compactions),
+              static_cast<int>(total_num_input_files),
+              static_cast<int>(total_num_output_files),
+              static_cast<unsigned long long>(total_bytes_read),
+              static_cast<unsigned long long>(total_bytes_written));
 
   return Status::OK();
 }

@@ -4,15 +4,13 @@
 
 #include "leveldb/db.h"
 
-#include <atomic>
-#include <cinttypes>
-#include <string>
-
-#include "gtest/gtest.h"
 #include "db/db_impl.h"
 #include "db/filename.h"
 #include "db/version_set.h"
 #include "db/write_batch_internal.h"
+#include <atomic>
+#include <cinttypes>
+#include <string>
 #include "leveldb/cache.h"
 #include "leveldb/env.h"
 #include "leveldb/filter_policy.h"
@@ -23,6 +21,7 @@
 #include "util/logging.h"
 #include "util/mutexlock.h"
 #include "util/testutil.h"
+#include "gtest/gtest.h"
 
 namespace leveldb {
 
@@ -2125,16 +2124,19 @@ class ModelDB : public DB {
     assert(false);  // Not implemented
     return Status::NotFound(key);
   }
-  Status Scan(const ReadOptions& options, const Slice& start_key,
-              const Slice& end_key,
-              std::vector<std::pair<std::string, std::string>>* result) override {
+  // test scan
+  Status Scan(
+      const ReadOptions& options, const Slice& start_key, const Slice& end_key,
+      std::vector<std::pair<std::string, std::string>>* result) override {
     return Status::NotSupported("Not implemented");
   }
+  // test delete range
   Status DeleteRange(const WriteOptions& options, const Slice& start_key,
                      const Slice& end_key) override {
     return Status::NotSupported("Not implemented");
   }
-    Status ForceFullCompaction() override {
+  // test force full compaction
+  Status ForceFullCompaction() override {
     return Status::NotSupported("Not implemented");
   }
   Iterator* NewIterator(const ReadOptions& options) override {
