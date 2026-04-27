@@ -1207,8 +1207,6 @@ Status DBImpl::DeleteRange(const WriteOptions& options, const Slice& start_key,
 }
 // Implementation of db ForceFullCompaction function
 Status DBImpl::ForceFullCompaction() {
-  // Snapshot cumulative stats before compaction so we can report only the
-  // work done by this call (stats_[] are lifetime-cumulative).
   CompactionStats stats_before[config::kNumLevels];
   {
     MutexLock l(&mutex_);
@@ -1224,13 +1222,11 @@ Status DBImpl::ForceFullCompaction() {
     TEST_CompactRange(level, nullptr, nullptr);
   }
 
-  // Propagate any background error recorded during compaction.
   {
     MutexLock l(&mutex_);
     if (!bg_error_.ok()) return bg_error_;
   }
 
-  // Compute per-field deltas across all levels.
   int64_t total_num_compactions = 0;
   int64_t total_num_input_files = 0;
   int64_t total_num_output_files = 0;
