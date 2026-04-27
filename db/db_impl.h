@@ -218,6 +218,9 @@ class DBImpl : public DB {
   // Has a background compaction been scheduled or is running?
   bool background_compaction_scheduled_ GUARDED_BY(mutex_);
 
+  // Set while ForceFullCompaction is running; blocks new reads and writes.
+  bool force_compaction_in_progress_ GUARDED_BY(mutex_);
+
   ManualCompaction* manual_compaction_ GUARDED_BY(mutex_);
 
   VersionSet* const versions_ GUARDED_BY(mutex_);

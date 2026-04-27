@@ -147,6 +147,7 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       seed_(0),
       tmp_batch_(new WriteBatch),
       background_compaction_scheduled_(false),
+      force_compaction_in_progress_(false),
       manual_compaction_(nullptr),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
                                &internal_comparator_)) {}
@@ -1092,6 +1093,9 @@ Iterator* DBImpl::NewInternalIterator(const ReadOptions& options,
                                       SequenceNumber* latest_snapshot,
                                       uint32_t* seed) {
   mutex_.Lock();
+  while (force_compaction_in_progress_) {
+    background_work_finished_signal_.Wait();
+  }
   *latest_snapshot = versions_->LastSequence();
 
   // Collect together all needed child iterators
@@ -1130,6 +1134,9 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
                    std::string* value) {
   Status s;
   MutexLock l(&mutex_);
+  while (force_compaction_in_progress_) {
+    background_work_finished_signal_.Wait();
+  }
   SequenceNumber snapshot;
   if (options.snapshot != nullptr) {
     snapshot =
@@ -1220,13 +1227,21 @@ Status DBImpl::ForceFullCompaction() {
   Status s = TEST_CompactMemTable();
   if (!s.ok()) return s;
 
+  // Block all reads and writes while the level-by-level compaction runs.
+  {
+    MutexLock l(&mutex_);
+    force_compaction_in_progress_ = true;
+  }
+
   for (int level = 0; level < config::kNumLevels - 1; level++) {
     TEST_CompactRange(level, nullptr, nullptr);
   }
 
-  // Propagate any background error recorded during compaction.
+  // Unblock reads and writes and propagate any background error.
   {
     MutexLock l(&mutex_);
+    force_compaction_in_progress_ = false;
+    background_work_finished_signal_.SignalAll();
     if (!bg_error_.ok()) return bg_error_;
   }
 
@@ -1430,7 +1445,10 @@ Status DBImpl::MakeRoomForWrite(bool force) {
   bool allow_delay = !force;
   Status s;
   while (true) {
-    if (!bg_error_.ok()) {
+    if (force_compaction_in_progress_) {
+      background_work_finished_signal_.Wait();
+      continue;
+    } else if (!bg_error_.ok()) {
       // Yield previous error
       s = bg_error_;
       break;
